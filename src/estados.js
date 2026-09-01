@@ -6,12 +6,13 @@
  * transiciones legales, y si esa lógica se duplica, un estado nuevo se agrega
  * en un lado y se olvida en el otro.
  */
-export const ESTADOS = ["pedido", "en_preparacion", "servido", "pagado", "cancelado"];
+export const ESTADOS = ["pedido", "en_preparacion", "listo_para_servir", "servido", "pagado", "cancelado"];
 
 /** De cada estado, a cuáles se puede pasar. Un estado sin salida es final. */
 const TRANSICIONES = {
   pedido: ["en_preparacion", "cancelado"],
-  en_preparacion: ["servido", "cancelado"],
+  en_preparacion: ["listo_para_servir", "cancelado"],
+  listo_para_servir: ["servido", "cancelado"],
   servido: ["pagado"],
   pagado: [],
   cancelado: [],
@@ -29,6 +30,7 @@ export function puedePasar(desde, hasta) {
 export const ETIQUETAS = {
   pedido: "Pedido",
   en_preparacion: "En preparación",
+  listo_para_servir: "Listo para servir",
   servido: "Servido",
   pagado: "Pagado",
   cancelado: "Cancelado",
