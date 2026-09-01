@@ -33,3 +33,17 @@ export const ETIQUETAS = {
   pagado: "Pagado",
   cancelado: "Cancelado",
 };
+
+/**
+ * Si un pedido todavía se puede cancelar.
+ *
+ * La regla del salón es "mientras siga en cocina": una vez que el plato salió
+ * hacia la mesa ya está hecho y cancelarlo no le devuelve nada a nadie. En esta
+ * máquina eso es `servido` en adelante.
+ *
+ * Se deriva de TRANSICIONES en vez de ser una segunda lista de estados: dos
+ * listas que dicen lo mismo se separan en cuanto alguien toca una sola.
+ */
+export function puedeCancelarse(estado) {
+  return puedePasar(estado, "cancelado");
+}
