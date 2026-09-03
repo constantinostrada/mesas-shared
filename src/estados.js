@@ -26,6 +26,20 @@ export function puedePasar(desde, hasta) {
   return transicionesDesde(desde).includes(hasta);
 }
 
+/**
+ * Un pedido se puede cancelar mientras siga en cocina: `pedido`,
+ * `en_preparacion` y `listo_para_servir` —el plato ya emplatado, todavía sin
+ * llevar—. Desde `servido` ya llegó a la mesa, y darlo de baja ahí no es una
+ * cancelación sino una devolución, que es otra cosa y no está modelada.
+ *
+ * Se deriva de las transiciones en vez de listar los estados a mano: así un
+ * estado nuevo que pueda pasar a "cancelado" queda cancelable sin tocar esta
+ * función, y uno que no pueda no se vuelve cancelable por olvido.
+ */
+export function esCancelable(estado) {
+  return puedePasar(estado, "cancelado");
+}
+
 /** Etiqueta para mostrarle a una persona. La API no la usa; la web sí. */
 export const ETIQUETAS = {
   pedido: "Pedido",
