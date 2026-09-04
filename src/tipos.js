@@ -33,7 +33,9 @@
  * hace cuánto?", que es lo que hace falta para poder deshacerlo; un historial
  * completo sería otra estructura y otra decisión.
  * En un pedido recién creado los tres son null: nacer en "pedido" no es un
- * cambio de estado, es el punto de partida.
+ * cambio de estado, es el punto de partida. Deshacer ese cambio los vuelve a
+ * null: el undo lo anula, no lo reemplaza por otro — ver puedeDeshacer en
+ * estados.js.
  * @property {string|null} estado_anterior      Estado desde el que se pasó.
  * @property {number|null} estado_cambiado_en   epoch ms del cambio.
  * @property {string|null} estado_cambiado_por  Mozo que hizo el cambio.
