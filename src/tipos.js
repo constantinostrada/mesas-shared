@@ -27,6 +27,16 @@
  * @property {ItemPedido[]} items
  * @property {string} estado         Ver estados.js
  * @property {number} creado_en      epoch ms
+ *
+ * Los tres campos que siguen describen EL ÚLTIMO cambio de estado, no su
+ * historia: cada cambio los pisa. Alcanza para responder "¿quién lo tocó y
+ * hace cuánto?", que es lo que hace falta para poder deshacerlo; un historial
+ * completo sería otra estructura y otra decisión.
+ * En un pedido recién creado los tres son null: nacer en "pedido" no es un
+ * cambio de estado, es el punto de partida.
+ * @property {string|null} estado_anterior      Estado desde el que se pasó.
+ * @property {number|null} estado_cambiado_en   epoch ms del cambio.
+ * @property {string|null} estado_cambiado_por  Mozo que hizo el cambio.
  */
 
 export const CARTA = [
