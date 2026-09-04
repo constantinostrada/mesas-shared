@@ -40,6 +40,48 @@ export function esCancelable(estado) {
   return puedePasar(estado, "cancelado");
 }
 
+/**
+ * Deshacer el último cambio de estado.
+ *
+ * Las inversas NO entran en TRANSICIONES a propósito. Esa tabla dice qué puede
+ * elegir el mozo —el panel arma un botón por cada salida— y es la que valida
+ * `POST /pedidos/:id/estado`. Meter ahí las vueltas atrás pondría un botón de
+ * "volver" entre las acciones normales y, peor, dejaría retroceder por /estado
+ * salteándose la ventana de tiempo y el chequeo de autoría, que son toda la
+ * gracia del undo: sin eso no es deshacer, es reescribir.
+ */
+export const VENTANA_UNDO_MS = 30_000;
+
+/** Estados sin vuelta: el pedido ya se cobró o se dio de baja. */
+export const ESTADOS_TERMINALES = ["pagado", "cancelado"];
+
+export function esTerminal(estado) {
+  return ESTADOS_TERMINALES.includes(estado);
+}
+
+/**
+ * Se puede volver a `estadoAnterior` si desde ahí se llegó hasta el estado
+ * actual: la inversa se deriva de la transición de ida en vez de listarse
+ * aparte, así un estado nuevo queda deshacible sin tocar esta función y las dos
+ * tablas no se desincronizan.
+ *
+ * Los terminales se excluyen a mano y no por derivación: `servido → pagado` es
+ * una transición legal como cualquier otra, así que sin esa línea un pedido ya
+ * cobrado se podría devolver a `servido`.
+ */
+export function puedeDeshacer(estadoActual, estadoAnterior) {
+  if (esTerminal(estadoActual)) return false;
+  return puedePasar(estadoAnterior, estadoActual);
+}
+
+/**
+ * La ventana es corta a propósito: alcanza para el mozo que se dio cuenta de
+ * que tocó la mesa equivocada, y no para revisar la historia de un turno.
+ */
+export function dentroDeVentanaUndo(cambiadoEn, ahora = Date.now()) {
+  return typeof cambiadoEn === "number" && ahora - cambiadoEn <= VENTANA_UNDO_MS;
+}
+
 /** Etiqueta para mostrarle a una persona. La API no la usa; la web sí. */
 export const ETIQUETAS = {
   pedido: "Pedido",

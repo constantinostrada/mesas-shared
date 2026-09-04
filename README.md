@@ -11,7 +11,9 @@ divergir.
 ## Qué hay
 
 - `src/tipos.js` — Mesa, Mozo, Pedido, ItemPedido
-- `src/estados.js` — los estados de un pedido y qué transiciones son válidas
+- `src/estados.js` — los estados de un pedido, qué transiciones son válidas y
+  qué se puede deshacer (las inversas viven aparte de `TRANSICIONES`: ver el
+  comentario de `puedeDeshacer`)
 
 ## Consumo
 
