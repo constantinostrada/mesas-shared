@@ -19,6 +19,7 @@ import { CardView } from './CardItem'
 import { resolveMove } from './dnd'
 import { byPosition, positionAfterLast } from './positions'
 import { useBoard, useBoardMutations } from './useBoard'
+import { useBoardRealtime } from './useBoardRealtime'
 import type { CardDraft } from './api'
 
 type Editing = { mode: 'create'; columnId: string } | { mode: 'edit'; card: Card }
@@ -27,6 +28,8 @@ export function BoardPage() {
   const { boardId = '' } = useParams()
   const board = useBoard(boardId)
   const m = useBoardMutations(boardId)
+  // Everyone else's changes land in the same cache this page renders from.
+  useBoardRealtime(boardId)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
 

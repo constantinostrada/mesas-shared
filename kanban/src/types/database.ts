@@ -146,6 +146,7 @@ export type Database = {
       can_edit_board: { Args: { p_board_id: string }; Returns: boolean }
       column_board: { Args: { p_column_id: string }; Returns: string }
       is_board_member: { Args: { p_board_id: string }; Returns: boolean }
+      topic_board_id: { Args: { p_topic: string }; Returns: string }
     }
     Enums: {
       board_role: "owner" | "editor" | "viewer"

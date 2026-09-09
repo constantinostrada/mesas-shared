@@ -9,3 +9,11 @@ What: `boards`' SELECT policy had to accept `owner_id = auth.uid()` on top of me
 ## dnd-kit ignores a synthetic pointerup that still has buttons=1
 
 What: Simulated drags in the browser only completed when the final `pointerup` carried `buttons: 0`; with `buttons: 1` dnd-kit kept the drag active and no drop ever fired · Why: cost about an hour of chasing a non-existent bug in the drop-resolution code · Where: kanban/src/features/board/dnd.ts · Learned: a real pointerup reports no buttons pressed — script drags accordingly, and check dnd-kit's own live-region text ("moved over" vs "dropped over") to tell an unfinished drag from a rejected drop
+
+## Realtime never applies RLS to DELETE events
+
+What: Postgres Changes delivers `DELETE` to every subscriber regardless of RLS (there is no row left to evaluate a policy against), and its `filter` only works on deletes if the table is `replica identity full` · Why: it quietly breaks "a non-member receives no events of that board" — the part of an authorization story that is easiest to assume and hardest to notice · Where: kanban/supabase/migrations/20260909000000_realtime_broadcast.sql · Learned: if deletes must be authorized, put the change stream on a private topic (broadcast from the database) where the check happens at channel join, and verify it with a real outsider client — the refusal shows up as CHANNEL_ERROR "Unauthorized", not as an empty stream
+
+## One CASE over TG_TABLE_NAME breaks a shared trigger function
+
+What: In a trigger function shared by two tables, `case tg_table_name when 'columns' then new.board_id else public.column_board(new.column_id) end` fails with `record "new" has no field "column_id"` · Why: plpgsql plans the whole CASE as one SQL expression, so every branch's field references must exist on the triggering row — the branch never taken still has to resolve · Where: kanban/supabase/migrations/20260909000000_realtime_broadcast.sql · Learned: split the branches into separate IF statements, each its own plan, when a trigger function serves tables with different columns
