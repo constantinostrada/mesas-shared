@@ -2,10 +2,14 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { Card, MemberProfile } from '../../types/models'
 
+/** Whoever has this card open right now, in their presence colour. */
+export type CardEditor = { color: string; name: string }
+
 type Props = {
   card: Card
   members: MemberProfile[]
   canEdit: boolean
+  editedBy?: CardEditor
   onEdit: (card: Card) => void
   onDelete: (card: Card) => void
 }
@@ -14,6 +18,7 @@ export function CardView({
   card,
   members,
   canEdit,
+  editedBy,
   onEdit,
   onDelete,
   dragging,
@@ -25,11 +30,23 @@ export function CardView({
   const assignee = members.find((m) => m.user_id === card.assignee_id)
   return (
     <div
-      className={`rounded-lg bg-white p-3 shadow-sm ring-1 ring-slate-200 ${
-        dragging ? 'rotate-1 shadow-lg' : ''
-      }`}
-      style={card.color ? { borderLeft: `4px solid ${card.color}` } : undefined}
+      className={`relative rounded-lg bg-white p-3 shadow-sm ${
+        editedBy ? '' : 'ring-1 ring-slate-200'
+      } ${dragging ? 'rotate-1 shadow-lg' : ''}`}
+      style={{
+        ...(card.color ? { borderLeft: `4px solid ${card.color}` } : null),
+        // Someone else has this card open: outline it in their colour.
+        ...(editedBy ? { boxShadow: `0 0 0 2px ${editedBy.color}` } : null),
+      }}
     >
+      {editedBy && (
+        <span
+          className="absolute -top-2 right-2 rounded-full px-1.5 py-0.5 text-[10px] leading-none font-medium text-white"
+          style={{ backgroundColor: editedBy.color }}
+        >
+          {editedBy.name} está editando
+        </span>
+      )}
       <div className="flex items-start gap-2">
         <p className="flex-1 text-sm font-medium break-words">{card.title}</p>
         {canEdit && onEdit && onDelete && (

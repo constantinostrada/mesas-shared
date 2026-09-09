@@ -4,6 +4,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import type { Card, Column, MemberProfile } from '../../types/models'
 import { SortableCard } from './CardItem'
+import type { CardEditor } from './CardItem'
 import { columnDroppableId } from './dnd'
 
 type Props = {
@@ -11,6 +12,8 @@ type Props = {
   cards: Card[]
   members: MemberProfile[]
   canEdit: boolean
+  /** Who has each card open, by card id. */
+  editors: ReadonlyMap<string, CardEditor>
   onAddCard: (columnId: string) => void
   onEditCard: (card: Card) => void
   onDeleteCard: (card: Card) => void
@@ -23,6 +26,7 @@ export function ColumnView({
   cards,
   members,
   canEdit,
+  editors,
   onAddCard,
   onEditCard,
   onDeleteCard,
@@ -68,6 +72,7 @@ export function ColumnView({
                 card={card}
                 members={members}
                 canEdit={canEdit}
+                editedBy={editors.get(card.id)}
                 onEdit={onEditCard}
                 onDelete={onDeleteCard}
               />

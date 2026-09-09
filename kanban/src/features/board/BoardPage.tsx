@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   DndContext,
@@ -9,6 +9,7 @@ import {
   useSensors,
 } from '@dnd-kit/core'
 import type { DragEndEvent, DragStartEvent } from '@dnd-kit/core'
+import type { PointerEvent as ReactPointerEvent } from 'react'
 import { AppHeader } from '../../components/AppHeader'
 import { errorMessage } from '../../lib/errors'
 import { canEdit as roleCanEdit } from '../../types/models'
@@ -20,7 +21,13 @@ import { resolveMove } from './dnd'
 import { byPosition, positionAfterLast } from './positions'
 import { useBoard, useBoardMutations } from './useBoard'
 import { useBoardRealtime } from './useBoardRealtime'
+import { CursorLayer } from './presence/CursorLayer'
+import { PresenceAvatars } from './presence/PresenceAvatars'
+import { editorsByCard } from './presence/presenceState'
+import { usePresence } from './presence/usePresence'
 import type { CardDraft } from './api'
+
+const clamp = (value: number, max: number) => Math.min(Math.max(value, 0), max)
 
 type Editing = { mode: 'create'; columnId: string } | { mode: 'edit'; card: Card }
 
@@ -30,8 +37,13 @@ export function BoardPage() {
   const m = useBoardMutations(boardId)
   // Everyone else's changes land in the same cache this page renders from.
   useBoardRealtime(boardId)
+  // Who else is here, where their pointer is, and what they have open.
+  const presence = usePresence(boardId)
   const [editing, setEditing] = useState<Editing | null>(null)
   const [activeId, setActiveId] = useState<string | null>(null)
+  /** The board's coordinate space: cursors are measured against this box, not
+   *  the viewport, so two people on different screens point at the same card. */
+  const boardRef = useRef<HTMLDivElement>(null)
 
   // A small drag threshold so clicking the card buttons still works.
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }))
@@ -48,6 +60,32 @@ export function BoardPage() {
   }, [data])
 
   const activeCard = data?.cards.find((c) => c.id === activeId) ?? null
+  const editors = useMemo(
+    () => editorsByCard(presence.roster, presence.selfKey),
+    [presence.roster, presence.selfKey],
+  )
+
+  // Tell the others which card this tab has open (and that it closed again).
+  const editingCardId = editing?.mode === 'edit' ? editing.card.id : null
+  const { setEditingCardId } = presence
+  useEffect(() => {
+    setEditingCardId(editingCardId)
+    return () => setEditingCardId(null)
+  }, [editingCardId, setEditingCardId])
+
+  const onPointerMove = (event: ReactPointerEvent) => {
+    const element = boardRef.current
+    if (!element) return
+    const rect = element.getBoundingClientRect()
+    if (!rect.width || !rect.height) return
+    // getBoundingClientRect already follows the horizontal scroll, so this is
+    // the offset inside the board itself. Clamped so a cursor can never widen
+    // the scroll area of the people watching it.
+    presence.reportCursor({
+      x: clamp(event.clientX - rect.left, rect.width),
+      y: clamp(event.clientY - rect.top, rect.height),
+    })
+  }
 
   const onDragStart = (e: DragStartEvent) => setActiveId(String(e.active.id))
 
@@ -130,6 +168,7 @@ export function BoardPage() {
         {!editable && (
           <span className="text-xs text-slate-500">Solo lectura</span>
         )}
+        <PresenceAvatars roster={presence.roster} selfKey={presence.selfKey} />
       </AppHeader>
 
       <DndContext
@@ -139,25 +178,30 @@ export function BoardPage() {
         onDragEnd={onDragEnd}
         onDragCancel={() => setActiveId(null)}
       >
-        <main className="flex flex-1 items-start gap-4 overflow-x-auto p-4">
-          {data.columns.map((column) => (
-            <ColumnView
-              key={column.id}
-              column={column}
-              cards={cardsByColumn.get(column.id) ?? []}
-              members={data.members}
-              canEdit={editable}
-              onAddCard={(columnId) => setEditing({ mode: 'create', columnId })}
-              onEditCard={(card) => setEditing({ mode: 'edit', card })}
-              onDeleteCard={onDeleteCard}
-              onRenameColumn={onRenameColumn}
-              onDeleteColumn={onDeleteColumn}
-            />
-          ))}
-          {editable && <AddColumnForm onAdd={onAddColumn} busy={m.addColumn.isPending} />}
-          {!editable && data.columns.length === 0 && (
-            <p className="text-sm text-slate-500">Este board todavía no tiene columnas.</p>
-          )}
+        <main className="flex-1 overflow-x-auto p-4" onPointerMove={onPointerMove}>
+          <div ref={boardRef} className="relative flex min-h-full w-max min-w-full items-start gap-4">
+            {data.columns.map((column) => (
+              <ColumnView
+                key={column.id}
+                column={column}
+                cards={cardsByColumn.get(column.id) ?? []}
+                members={data.members}
+                canEdit={editable}
+                editors={editors}
+                onAddCard={(columnId) => setEditing({ mode: 'create', columnId })}
+                onEditCard={(card) => setEditing({ mode: 'edit', card })}
+                onDeleteCard={onDeleteCard}
+                onRenameColumn={onRenameColumn}
+                onDeleteColumn={onDeleteColumn}
+              />
+            ))}
+            {editable && <AddColumnForm onAdd={onAddColumn} busy={m.addColumn.isPending} />}
+            {!editable && data.columns.length === 0 && (
+              <p className="text-sm text-slate-500">Este board todavía no tiene columnas.</p>
+            )}
+
+            <CursorLayer store={presence.store} roster={presence.roster} selfKey={presence.selfKey} />
+          </div>
         </main>
 
         <DragOverlay>
