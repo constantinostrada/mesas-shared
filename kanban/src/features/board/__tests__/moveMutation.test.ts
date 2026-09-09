@@ -2,8 +2,9 @@ import { MutationObserver, QueryClient } from '@tanstack/react-query'
 import { describe, expect, it, vi } from 'vitest'
 import type { BoardData } from '../api'
 import { boardKey } from '../boardKey'
-import { moveCardMutationOptions } from '../moveMutation'
+import { moveCardMutationOptions, pendingMoveCardIds } from '../moveMutation'
 import type { MoveVars } from '../moveMutation'
+import { applyRemoteChange } from '../remoteChanges'
 
 const card = (id: string, column_id: string, position: string) =>
   ({
@@ -24,7 +25,10 @@ function setup(mutationFn: (vars: MoveVars) => Promise<void>) {
   const data: BoardData = {
     board: { id: boardId, name: 'B', owner_id: 'u1', created_at: '' } as BoardData['board'],
     role: 'editor',
-    columns: [],
+    columns: [
+      { id: 'col1', board_id: boardId, title: 'To do', position: 'a0' },
+      { id: 'col2', board_id: boardId, title: 'Doing', position: 'a1' },
+    ],
     cards: [card('A', 'col1', 'a0'), card('B', 'col1', 'a1'), card('C', 'col1', 'a2')],
     members: [],
   }
@@ -34,13 +38,15 @@ function setup(mutationFn: (vars: MoveVars) => Promise<void>) {
     qc,
     moveCardMutationOptions(qc, boardId, (m) => errors.push(m), mutationFn),
   )
-  const cards = () => (qc.getQueryData<BoardData>(boardKey(boardId)) as BoardData).cards
+  const cached = () => qc.getQueryData<BoardData>(boardKey(boardId)) as BoardData
+  const cards = () => cached().cards
   const order = () => cards().map((c) => c.id)
+  const pending = () => pendingMoveCardIds(qc, boardId)
   const moved = () => {
     const c = cards().find((x) => x.id === 'C')!
     return { column: c.column_id, position: c.position }
   }
-  return { observer, errors, order, moved }
+  return { observer, errors, order, moved, cached, pending }
 }
 
 describe('optimistic card move', () => {
@@ -73,5 +79,63 @@ describe('optimistic card move', () => {
     expect(moved()).toEqual({ column: 'col1', position: 'a2' })
     expect(order()).toEqual(['A', 'B', 'C'])
     expect(errors).toEqual(['Failed to fetch'])
+  })
+})
+
+describe('the user\'s own move against everyone else\'s', () => {
+  it('leaves the card where it was dropped while the move is in flight, then takes the position the server kept', async () => {
+    let release: () => void = () => {}
+    const inFlight = new Promise<void>((r) => (release = r))
+    const { observer, order, cached, pending } = setup(() => inFlight)
+
+    const run = observer.mutate({ id: 'C', columnId: 'col1', position: 'a0V' })
+    await vi.waitFor(() => expect(order()).toEqual(['A', 'C', 'B']))
+    expect([...pending()]).toEqual(['C'])
+
+    // The echo of this very move — and any rival move of the same card —
+    // must not drag the card out from under the user mid-flight.
+    const before = cached()
+    const during = applyRemoteChange(
+      before,
+      { table: 'cards', operation: 'UPDATE', row: card('C', 'col2', 'a9') },
+      { pendingCardIds: pending() },
+    )
+    expect(during).toBe(before)
+
+    release()
+    await run
+    expect(pending().size).toBe(0)
+
+    // Settled: whatever the server ended up holding wins over the optimistic
+    // position, without duplicating the card.
+    const after = applyRemoteChange(
+      cached(),
+      { table: 'cards', operation: 'UPDATE', row: card('C', 'col2', 'a9') },
+      { pendingCardIds: pending() },
+    )
+    expect(after.cards.filter((c) => c.id === 'C')).toHaveLength(1)
+    expect(after.cards.find((c) => c.id === 'C')).toMatchObject({
+      column_id: 'col2',
+      position: 'a9',
+    })
+  })
+
+  it('keeps applying what others do to other cards while a move is in flight', async () => {
+    let release: () => void = () => {}
+    const inFlight = new Promise<void>((r) => (release = r))
+    const { observer, order, cached, pending } = setup(() => inFlight)
+
+    const run = observer.mutate({ id: 'C', columnId: 'col1', position: 'a0V' })
+    await vi.waitFor(() => expect(order()).toEqual(['A', 'C', 'B']))
+
+    const next = applyRemoteChange(
+      cached(),
+      { table: 'cards', operation: 'DELETE', id: 'A' },
+      { pendingCardIds: pending() },
+    )
+    expect(next.cards.map((c) => c.id)).toEqual(['C', 'B'])
+
+    release()
+    await run
   })
 })
