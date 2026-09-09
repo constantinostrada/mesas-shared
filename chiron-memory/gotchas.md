@@ -17,3 +17,11 @@ What: Postgres Changes delivers `DELETE` to every subscriber regardless of RLS (
 ## One CASE over TG_TABLE_NAME breaks a shared trigger function
 
 What: In a trigger function shared by two tables, `case tg_table_name when 'columns' then new.board_id else public.column_board(new.column_id) end` fails with `record "new" has no field "column_id"` · Why: plpgsql plans the whole CASE as one SQL expression, so every branch's field references must exist on the triggering row — the branch never taken still has to resolve · Where: kanban/supabase/migrations/20260909000000_realtime_broadcast.sql · Learned: split the branches into separate IF statements, each its own plan, when a trigger function serves tables with different columns
+
+## Calling track() twice on a presence key corrupts every other client's roster
+
+What: A second `channel.track()` with a changed payload leaves TWO metas under that key in the other clients' `presenceState()`, both stripped of their `presence_ref` — and because leaves are matched by ref, that key then NEVER disappears when its owner untracks or closes the tab · Why: it silently breaks "the avatar disappears when the tab closes", and it looks like a leave-detection bug rather than a track bug · Where: kanban/src/features/board/presence/usePresence.ts · Learned: track once per join and send changes as broadcasts; `untrack()` before a fresh `track()` does keep the state clean, but it makes the peer blink out of the roster in between
+
+## supabase.channel(topic) returns the channel that already exists for that topic
+
+What: A cleanup that deferred `removeChannel` (`channel.untrack().finally(...)`) left the channel in the client's list, so React StrictMode's immediate remount got the SAME, already-subscribed channel back and `channel.on('presence', ...)` threw "cannot add presence callbacks after subscribe()" — a blank board in dev · Why: the tests never saw it (no StrictMode, no remount) and the message points at the binding, not at the cleanup · Where: kanban/src/features/board/presence/usePresence.ts · Learned: remove a Realtime channel synchronously in the effect cleanup, and do not untrack first — leaving the topic drops the client's presence anyway
